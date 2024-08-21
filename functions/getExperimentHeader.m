@@ -33,13 +33,12 @@ if (strcmp(lower(patientId),'d009'))
             header.nevFilePath = []; % folder where the stimulus are recorded (in Blackrok system, the stimulus are recorded in a '.nev' file)
             header.shamStimIndex = 0;
             header.isStimuliCodonsNeedRemapping = true;
-            header.stimuli = {'sham','40Hz loud','40Hz medium','LEMAALA(push)',...
-                'LEMATA(no push)', 'Anima','Brad Pitt','Harry Potter','Joey',...
+            header.stimuli = {'sham','40Hz loud','Brad Pitt','Harry Potter','Joey',...
                 'Kelev','Superman','Titanic','Tom Cruise','Tzipor'};
-            header.stimuliCodons = [0,1,2,3,4,5,6,7,8,9,10,11,12,13];
+            header.stimuliCodons = [0,1,2,3,4,5,6,7,8,9];
            header.stimuliCodons_music=[];
-            header.nStimTypes_words=[3:13];  
-            header.nStimTypes_click=[1,2];
+            header.nStimTypes_words=[3:10];  
+            header.nStimTypes_click=[1];
           header.nStimTypes_sentence=[];
           
             header.stimLengthInSec =zeros(1,14) ;  header.stimLengthInSec(1:14) =0.5;
