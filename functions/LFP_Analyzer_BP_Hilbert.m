@@ -24,8 +24,8 @@ if(~exist('equalizeIndices','var'))
     equalizeIndices = [Index.UNEQUALIZED, Index.EQUALIZED];
 end
 
-if (~exist('cutoffTimes','var'))
-  cutoffTimes = [-Inf Inf];
+if (~exist('cutoffTimes','var')) 
+  cutoffTimes = [-Inf Inf]; % run on all the data (one state)
     numOfTimeGroups = size(cutoffTimes,1);
 else
     numOfTimeGroups = size(cutoffTimes,2);
@@ -73,17 +73,14 @@ for channel = channels
     
     [indicesPerGroup] = cellfun(@(x) getIndicesPerTimeGroup_H(cutoffTimes,x,false),...
         stimStartTimesPerStimType,'UniformOutput',false);
-    %get indices for each time group !!HANNA!!
     [indicesPerGroupPerStimType] = cellfun(@(x) getIndicesPerTimeGroup_H(cutoffTimes,x,false),...
         stimStartTimesPerStimType,'UniformOutput',false);
-% %     get a random sample of indices for each time group to equalize to num
-% %     of epochs in each group
+% get a random sample of indices for each time group to equalize to num of epochs in each group
     [indicesPerGroupPerStimTypeEqualizedNumOfEpochs] = cellfun(@(x) getIndicesPerTimeGroup_H(cutoffTimes,x,true),...
         stimStartTimesPerStimType,'UniformOutput',false); % Hanna
-% % % % % % % % % % % % % % % %     
     nStimTypes = length(dataEpochsPerStim);
     
-    for stimTypeInd=1:nStimTypes-1  
+    for stimTypeInd=1:nStimTypes-1  % run through all the stim, skip stim 0 (empty stim)
         
         stimStr = stimMap(stimTypeInd);
         
@@ -109,7 +106,6 @@ for channel = channels
                 gammaActivityForThisStim = gammaActivityPerStim{stimTypeInd};
 
             epochsIndicesPerEqualizeState{Index.UNEQUALIZED} = indicesForGroupAndStim;
-% %             epochsIndicesPerEqualizeState{Index.EQUALIZED} = indicesForGroupAndStimEqualizedNumOfEpochs;
             
             dataEpochsPerEqualizedState{Index.UNEQUALIZED} = dataEpochsForThisStim(...
                 epochsIndicesPerEqualizeState{Index.UNEQUALIZED},:);
@@ -119,8 +115,7 @@ for channel = channels
 
            electrodeFullStr = getElectrodeFullStr(montageMap,electrodeTypeInd,channel);
              fileName=[char(header.id) char(electrodeFullStr) '_' stimStr '_' header.groupsNames{groupInd}];         
-% % % % % % % % % % % % % % % 
-% % % % % % % % % % % % % % % 
+
             if (isempty(badEpochsLog))
                 badEpochsLogForStim = [];
                 badStimIndicesForStim = [];
