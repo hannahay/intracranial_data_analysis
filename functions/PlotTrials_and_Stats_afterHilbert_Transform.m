@@ -1,169 +1,134 @@
-function PlotTrials_and_Stats_afterHilbert_Transform (header, channels,params)
-    % Load necessary data
+function PlotTrials_and_Stats_afterHilbert_Transform(header, channels, params)
+    % PlotTrials_and_Stats_afterHilbert_Transform processes and plots statistical analysis after applying the Hilbert transform
+    %
+    % This function loads the Hilbert transform data, performs statistical analysis, and plots results for specified channels and frequency bands.
+    %
+    % Arguments:
+    %   header - Struct containing metadata and data paths.
+    %   channels - Array of channel indices to be analyzed.
+    %   params - Struct containing parameters such as frequency bands, gaps, thresholds, etc.
 
-    groups=params.groups;
-    freq_bands=params.freq_bands;
-    electrodeTypeInd=params.electrodeTypeInd;
-    gap=params.gap;
-    min_num_of_trials=params.min_num_of_trials;
-    sigma=params.sigma;
-    hsize=params.hsize;
-    std_thres=params.std;
-    electrode_name={'Macro', 'Micro'};
+    % Unpack parameters for easier access
+    group_names = params.groups;
+    freq_bands = params.freq_bands;
+    electrodeTypeInd = params.electrodeTypeInd;
+    gap = params.gap;
+    min_num_of_trials = params.min_num_of_trials;
+    sigma = params.sigma;
+    hsize = params.hsize;
+    std_thres = params.std;
+    electrode_name = {'Macro', 'Micro'};
 
-    load(fullfile(header.processedDataPath, ['groupsTimes']));
-    timefDataFolderPath = fullfile(header.processedDataPath, 'BP_filter', [electrode_name{electrodeTypeInd}...
-        num2str(freq_bands(1)) '_' num2str(freq_bands(2)) 'Hz']);
+    % Load group times and setup paths
+    load(fullfile(header.processedDataPath, 'groupsTimes.mat'));
+    timefDataFolderPath = fullfile(header.processedDataPath, 'BP_filter', electrode_name{electrodeTypeInd}, ...
+        sprintf('%d_%dHz', freq_bands(1), freq_bands(2)));
+
     numOfTimeGroups = size(groupsTimes, 2);
     stimMap = getStimuliMap(header, true, true);
     montageStruct = readMontage(header);
-    plotColors = {'b', 'r', 'g'}; % Colors for plotting
+    plotColors = {'b', 'r', 'g'};  % Colors for plotting
 
     % Loop over channels
     for channel = channels
-
         electrodeFullStr = getElectrodeFullStr(montageStruct, electrodeTypeInd, channel);
 
-        % Loop over stimuli
-        stim = 1;
-        for stimInd = header.stimuliCodons(2:end) % not running on "empty stim"
-
+        % Loop over stimuli, skipping the "empty stim"
+        for stimInd = header.stimuliCodons(2:end)  
             stimStr = stimMap(stimInd);
+            % Define paths for figures and data storage specific to each channel and stimulus
+            figureSavePath = fullfile(header.figuresDataPath, 'envelop_Hilbert', electrode_name{electrodeTypeInd}, ...
+               sprintf('%d_%dHz', freq_bands(1), freq_bands(2)), ['channel_' num2str(channel)]);
+            if ~exist(figureSavePath, 'dir')
+                mkdir(figureSavePath);
+            end
 
-            % Loop over groups
-            for groupInd = 1: numOfTimeGroups
-                fileName = [header.id electrodeFullStr '_' stimStr '_' header.groupsNames{groupInd}];
-                if iscell(fileName)
-                    fileName = cell2mat(fileName);
-                end
+            dataSavePath = fullfile(header.processedDataPath, 'envelop_Hilbert', sprintf('%d-%dHz', freq_bands(1), freq_bands(2)), ...
+               ['channel_' num2str(channel)]);
+            if ~exist(dataSavePath, 'dir')
+                mkdir(dataSavePath);
+            end
+
+            % Loop over time groups
+            for groupInd = 1:numOfTimeGroups
+                fileName = sprintf('%s_%s_%s %s.mat', header.id, electrodeFullStr, stimStr, header.groupsNames{groupInd});
                 epochsDataFullPath = fullfile(timefDataFolderPath, fileName);
-                load(epochsDataFullPath)
+                load(epochsDataFullPath);
 
-                baselineLength = timefArgs.preStartTimeInSec * 1000; % Baseline length in ms
-                responseLength = round((header.stimLengthInSec(stimInd + 1) + 0.100) * 1000); % Response length in ms
-                
-                [filteredDataNormSmooth, sigma] = smooth_f(filtered_data_norm, sigma, hsize ,1);
+                % Analysis parameters
+                baselineLength = timefArgs.preStartTimeInSec * 1000;
+                responseLength = round((header.stimLengthInSec(stimInd + 1) + 0.100) * 1000);
 
-                indexStimPerState{groupInd} = [];
-                filter_smooth_dataperGroup{groupInd} = filteredDataNormSmooth;
-                threshold = mean(mean(filter_smooth_dataperGroup{groupInd})) + std_thres* mean(std(filter_smooth_dataperGroup{groupInd}));
+                % Data smoothing
+                [filteredDataNormSmooth, sigma] = smooth_f(filtered_data_norm, sigma, hsize, 1);
 
-                % Remove noisy epochs (above threshold)
-                epochIndex = 1;
-                validEpochIndex = 1;
-                totalEpochs = size(filter_smooth_dataperGroup{groupInd}, 1);
-                IndicesPerGroupStimState{1, groupInd} = indicesPerGroupPerStimType;
-                
-%                 CHECK THIS CODE
-%                 while epochIndex <= totalEpochs
-%                     if any(filter_smooth_dataperGroup{groupInd}(epochIndex, :) > threshold)
-%                         filter_smooth_dataperGroup{groupInd}(epochIndex, :) = [];
-%                         IndicesPerGroupStimState{1, groupInd}(epochIndex) = [];
-%                         indexStimPerState{groupInd}(validEpochIndex) = epochIndex;
-%                         validEpochIndex = validEpochIndex + 1;
-%                     else
-%                         epochIndex = epochIndex + 1;
-%                     end
-%                     epochIndex = epochIndex + 1;
-%                 end
+                % Define and calculate thresholds
+                threshold = mean(mean(filteredDataNormSmooth)) + std_thres * mean(std(filteredDataNormSmooth));
 
-                % Perform statistical analysis
-                [p(groupInd, :), h(groupInd, :)] = fastRasterRankSum_2024(filter_smooth_dataperGroup{groupInd}, baselineLength, round(responseLength), ...
+                % Statistical analysis using a custom fast Raster technique
+                [p(groupInd, :), h(groupInd, :)] = fastRasterRankSum_2024(filteredDataNormSmooth, baselineLength, round(responseLength), ...
                     'alpha', 0.01, 'fdr', 1, 'responseType', 'inc', 'gap', gap);
 
-                % Check if the response is significant
-                if size(filter_smooth_dataperGroup{groupInd}, 1) < min_num_of_trials
+                % Handling minimum trial requirements
+                if size(filteredDataNormSmooth, 1) < min_num_of_trials
                     h(groupInd, :) = zeros(1, size(h, 2));
                 end
 
+                % Validate significant response length
                 if length(find(h(groupInd, :))) < 0.015 * header.stimLengthInSec(stimInd + 1) * 1000
                     h(groupInd, :) = zeros(1, size(h, 2));
                 end
 
-                % Plot results
-                timeVector = -(baselineLength-1):responseLength+900;
-
-                plot(timeVector, mean(filter_smooth_dataperGroup{groupInd}), 'LineWidth', 2, 'Color', plotColors{groupInd});
+                % Plotting results
+                plot_afterstimend_ms = 900;
+                timeVector = -(baselineLength-1) : (responseLength + plot_afterstimend_ms);
+                plot(timeVector, mean(filteredDataNormSmooth), 'LineWidth', 2, 'Color', plotColors{groupInd});
                 hold on;
-                title([ num2str(freq_bands(1)) '-' num2str(freq_bands(2)) 'Hz' '- Hilbert Envelope' stimStr]);
-                responseLine = NaN(1, length(filter_smooth_dataperGroup{groupInd}));
-                h_onlypos=h(groupInd);
-                h_onlypos(h_onlypos==0)=NaN;
-                responseLine(baselineLength:baselineLength + responseLength) = h_onlypos * max(mean(filter_smooth_dataperGroup{groupInd}, 1));
+                max_sig(groupInd)=max(mean(filteredDataNormSmooth));
+                min_sig(groupInd)=min(mean(filteredDataNormSmooth));
+
+                title(sprintf('%d-%dHz - Hilbert Envelope %s', freq_bands(1), freq_bands(2), stimStr));
+                responseLine = NaN(1, length(filteredDataNormSmooth));
+                h_onlypos = h(groupInd);
+                h_onlypos(h_onlypos == 0) = NaN;
+                responseLine(baselineLength : (baselineLength + responseLength)) = h_onlypos * max(mean(filteredDataNormSmooth, 1));
                 plot(responseLine, '*', 'Color', plotColors{groupInd});
-                xlim([timeVector(1) responseLength+500])
+                xlim([timeVector(1), responseLength + 500]);
+                
+                % Set plot limits for the final group
                 if groupInd == numOfTimeGroups
-                    allvalues = vertcat(filter_smooth_dataperGroup{:});
-                    allvalues_mean=[mean(allvalues(1:size(filter_smooth_dataperGroup{1,1},1),:),1), ...
-                  mean(allvalues(size(filter_smooth_dataperGroup{1,1})+1:size(allvalues,1),:),1)]  ;    
-                    ylim([min(allvalues_mean)-0.05, max(allvalues_mean)+0.05]);
-                end
-                currentAxis = gca;
-                ylimCurrent = get(currentAxis, 'YLim');
-
-                % Plot stimulation times
-                stimStartTime = 0; % Stim start time
-                line([stimStartTime stimStartTime], ylimCurrent, 'Color', 'k', 'LineWidth', 1)
-                stimEndTime = header.stimLengthInSec(stimInd + 1) * 1000; % Stim end time
-                line([stimEndTime stimEndTime], ylimCurrent, 'Color', 'k', 'LineWidth', 1);
-                hold on;
-            end
-
-            % Save figures
-            figureSavePath = fullfile(header.figuresDataPath, 'envelop_Hilbert',  [electrode_name{electrodeTypeInd}...
-           num2str(freq_bands(1)) '_' num2str(freq_bands(2)) 'Hz']);
-            if ~exist(figureSavePath, 'dir')
-                mkdir(figureSavePath);
-            end
-            savePath = fullfile(figureSavePath, ['channel_' num2str(channel) electrodeFullStr stimStr]);
-            saveas(gcf, savePath, 'fig');
-            saveas(gcf, savePath, 'jpeg');
-            close all
-
-            % Save processed data
-            dataSavePath = fullfile(header.processedDataPath, 'envelop_Hilbert_', [num2str(freq_bands(1)) '-' num2str(freq_bands(2)) 'Hz']);
-            if ~exist(dataSavePath, 'dir')
-                mkdir(dataSavePath);
-            end
-            save(fullfile(dataSavePath, ['channel_' num2str(channel) electrodeFullStr stimStr]), 'h', 'p', 'filter_smooth_dataperGroup', 'indexStimPerState', 'IndicesPerGroupStimState');
-
-            % Compute and save response statistics
-            if numOfTimeGroups==2
-             significantResponse = or(h(1, :), h(2, :));
-            elseif numOfTimeGroups==3
-             significantResponse = or(h(1, :), h(2, :),h(3, :));
-
-            if any(significantResponse)
-                dataIndex = 1;
-                for groupInd = 1: numOfTimeGroups
-                    Sig_response_timeavg{stim, dataIndex} = mean(filter_smooth_dataperGroup{groupInd}(:, find(significantResponse)), 2);
-                    Mean_Resp(stim, dataIndex) = mean(Sig_response_timeavg{stim, dataIndex});
-                    dataIndex = dataIndex + 1;
+                    ylim([min(min_sig) - 0.1, max(max_sig) + 0.1]);
                 end
 
-                [p_states(stim), h_states(stim)] = ranksum(Sig_response_timeavg{stim, 1}, Sig_response_timeavg{stim, 2}, 'alpha', 0.01);
-                stim_ind(stim) = stimInd;
-                stim_name{stim} = stimStr;
-                stim = stim + 1;
+                % Mark stimulation times
+                stimStartTime = 0;
+                line([stimStartTime, stimStartTime], get(gca, 'YLim'), 'Color', 'k', 'LineWidth', 1);
+                stimEndTime = header.stimLengthInSec(stimInd + 1) * 1000;
+                line([stimEndTime, stimEndTime], get(gca, 'YLim'), 'Color', 'k', 'LineWidth', 1);
             end
+                legend(group_names{1} ,'', '', '',group_names{2});
 
-            clear baseline response response_normalized filter_smooth_dataperGroup h p dataEpochs ...
-                filter_smooth_dataperGroup_m h p significantResponse significantResponse h_or h_or_inh
+            % Save plots and data
+            savePlotAndData(header, figureSavePath, dataSavePath, channel, electrode_name,electrodeTypeInd,electrodeFullStr, freq_bands,stimStr, filteredDataNormSmooth, h, p);
         end
-
-        % Save channel results
-        resultsSavePath = fullfile(header.processedDataPath, 'LFP', 'afterStatsAnalysis', electrode_name{electrodeTypeInd}, [num2str(freq_bands(1)) '-' num2str(freq_bands(2)) 'Hz']);
-        if ~exist(resultsSavePath, 'dir')
-            mkdir(resultsSavePath);
-        end
-
-        if exist('h_states', 'var')
-            saveFileName = sprintf('Patient%s_channel%d(%s_%d)_%s_p=0_01', char(header.id), channel, montageStruct{2, channel}.location, ...
-                montageStruct{2, channel}.depth, freq_bands);
-            save(fullfile(resultsSavePath, saveFileName), 'p_states', 'h_states', 'Mean_Resp', 'Sig_response_timeavg', ...
-                'electrodeFullStr', 'channel', 'stim_ind', 'stim_name', 'stim', 'electrodeFullStr');
-        end
-
-        clear p_states h_states stim_ind stim_name Mean_Resp Sig_response_timeavg
     end
+end
+
+function savePlotAndData(header, figureSavePath, dataSavePath, channel, electrode_name,electrodeTypeInd,electrodeFullStr,freq_bands, stimStr, filteredDataNormSmooth, h, p)
+    % Helper function to save plots and processed data
+    figureSavePath = fullfile(header.figuresDataPath, 'envelop_Hilbert', sprintf('%s_%d_%dHz', electrode_name{electrodeTypeInd}, freq_bands(1), freq_bands(2)));
+    if ~exist(figureSavePath, 'dir')
+        mkdir(figureSavePath);
+    end
+    savePath = fullfile(figureSavePath, sprintf('channel_%d_%s_%s', channel, electrodeFullStr, stimStr));
+    saveas(gcf, savePath, 'fig');
+    saveas(gcf, savePath, 'jpeg');
+
+    dataSavePath = fullfile(header.processedDataPath, 'envelop_Hilbert_', sprintf('%d-%dHz', freq_bands(1), freq_bands(2)));
+    if ~exist(dataSavePath, 'dir')
+        mkdir(dataSavePath);
+    end
+    save(fullfile(dataSavePath, sprintf('channel_%d_%s_%s', channel, electrodeFullStr, stimStr)), 'h', 'p', 'filteredDataNormSmooth');
+
+    close(gcf);  % Close figure after saving
 end
