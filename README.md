@@ -12,7 +12,7 @@ To run the different scripts, you need to have:
   
 Script:
 1) runHilbertTransform: it runs the Hilbert Transform and takes the envelope of every channel of everytype (MICRO and MACRO) for the frequency bands defined and cut the data around each specific stimulus's trials, for wakefulness and sleep separately.
-2) AnalyzeHilbertTransform: Check for significant responses during stimulus presentation for wakefulness and sleep. Plot the mean signal across trials for each stimulus (and significant time points, if there are any). If there is a significant increase or decrease of the signal during the stim presentation in one of the two states, the code compares the signal between them and saves the p value
+2) AnalyzeHilbertTransform: Check for significant responses during stimulus presentation for wakefulness and sleep. Plot the mean signal across trials for each stimulus (and significant time points, if there are any). If there is a significant increase or decrease of the signal during the stim presentation in one of the two states, the code save the stim index and the mean average for the significant stim in each state
 
 Coming soon: 
 - code to pre-process the raw data (from Blackrock and Neuralynx system recordings): downsample, denoise, extracting stimulus time, check synchronization...
